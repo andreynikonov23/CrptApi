@@ -23,16 +23,7 @@ public class CrptApi {
     private TimeUnit timeUnit;
     private int requestLimit;
 
-    public CrptApi() {
-        Product[] products = new Product[2];
-        Product product1 = new Product("certificateDocument1", new Date(), "certificateDocument1", "certificateDocument1", "certificateDocument1", new Date(), "certificateDocument1", "certificateDocument1", "certificateDocument1");
-        Product product2 = new Product("certificateDocument2", new Date(), "certificateDocument2", "certificateDocument2", "certificateDocument2", new Date(), "certificateDocument2", "certificateDocument2", "certificateDocument2");
-        products[0] = product1;
-        products[1] = product2;
-        Document document = new Document(new Description("participantInn"), "id", "status", true, "ownerInn", "participantInn", "participantInn", new Date(), "participantInn", products, new Date(), "participantInn");
-        Date productionDate = document.getProductionDate();
-        createDoc(document, "test");
-    }
+    public CrptApi() {}
     public CrptApi(TimeUnit timeUnit, int requestLimit) {
         this.timeUnit = timeUnit;
         this.requestLimit = requestLimit;
