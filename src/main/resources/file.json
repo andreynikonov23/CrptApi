@@ -3,7 +3,7 @@
   "doc_id": "string",
   "doc_status": "string",
 "doc_type": "LP_INTRODUCE_GOODS",
-  109 "importRequest": true,
+   "importRequest": true,
 "owner_inn": "string",
   "participant_inn": "string",
   "producer_inn": "string",
