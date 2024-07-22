@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.*;
 
 import java.io.IOException;
@@ -14,38 +13,62 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Date;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Getter
-@Setter
 public class CrptApi {
     private final URI CRYPT_API_CREATE_DOC_URL = URI.create("https://ismp.crpt.ru/api/v3/lk/documents/create");
+    private static final ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(1);
+    private final AtomicInteger requestCounter = new AtomicInteger();
     private TimeUnit timeUnit;
     private int requestLimit;
 
-    public CrptApi() {}
     public CrptApi(TimeUnit timeUnit, int requestLimit) {
-        this.timeUnit = timeUnit;
-        this.requestLimit = requestLimit;
-    }
-
-    public void createDoc(Document document, String signature) {
-        try {
-            String json = convertToJSON(document);
-            sendRequestToCryptApi(json);
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
+        if (requestLimit <= 0) {
+            throw new RuntimeException();
+        } else {
+            init(timeUnit, requestLimit);
         }
     }
 
-    public String convertToJSON(Document document) throws IOException {
-        StringWriter stringWriter = new StringWriter();
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.writeValue(stringWriter, document);
-        return stringWriter.toString();
+    public HttpResponse<String> createDoc(Document document, String signature) {
+        HttpResponse<String> response = null;
+        if (!(recordAndCheckRequestLimit())) {
+            try {
+                String json = JSONCrptApiDocConverter.convertDocToJSON(document);
+                response = sendRequestToCrptApi(json);
+            } catch (IOException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            System.out.println("Request Limit");
+        }
+        return response;
     }
 
-    public HttpResponse sendRequestToCryptApi(String body) throws IOException, InterruptedException {
+    private void init(TimeUnit timeUnit, int requestLimit) {
+        this.timeUnit = timeUnit;
+        this.requestLimit = requestLimit;
+        resetCounter();
+    }
+
+    private void resetCounter() {
+        System.out.println("reset counter");
+        final Runnable runnable = () -> requestCounter.set(0);
+        scheduledExecutorService.scheduleAtFixedRate(runnable, 0, 1, timeUnit);
+    }
+    private boolean recordAndCheckRequestLimit() {
+        synchronized (this) {
+            System.out.println(requestCounter.incrementAndGet());
+            return requestCounter.get() > requestLimit;
+        }
+    }
+
+
+    private HttpResponse<String> sendRequestToCrptApi(String body) throws IOException, InterruptedException {
         HttpClient httpClient = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(CRYPT_API_CREATE_DOC_URL)
@@ -59,6 +82,7 @@ public class CrptApi {
     @Setter
     @AllArgsConstructor
     @NoArgsConstructor
+    @EqualsAndHashCode
     static
     class Document {
         private Description description;
@@ -87,12 +111,29 @@ public class CrptApi {
         @JsonProperty("reg_number")
         private String regNumber;
 
+        @Override
+        public String toString() {
+            return String.format("Document {description: {%s}," +
+                    " doc_id: \"%s\"," +
+                    " doc_status: \"%s\"," +
+                    " doc_type: \"LP_INTRODUCE_GOODS\"," +
+                    " importRequest: true," +
+                    " owner_inn: \"%s\"," +
+                    " participant_inn: \"%s\"," +
+                    " producer_inn: \"%s\"," +
+                    " production_date: \"%s\"," +
+                    " production_type: \"%s\",}" +
+                    " products: \"%s\"," +
+                    " reg_date: \"%s\"," +
+                    " reg_number: \"%s\"", description, id, status, importRequest, ownerInn, participantInn, producerInn, productionDate.toString(), productionType, products, regDate.toString(), regNumber);
+        }
     }
     @JsonAutoDetect
     @Getter
     @Setter
     @AllArgsConstructor
     @NoArgsConstructor
+    @EqualsAndHashCode
     static class Product {
         @JsonProperty("certificate_document")
         private String certificateDocument;
@@ -114,18 +155,42 @@ public class CrptApi {
         private String uitCode;
         @JsonProperty("uitu_code")
         private String uituCode;
+
+        @Override
+        public String toString() {
+            return String.format("Product {certificate_document: \"%s\"," +
+                    " certificate_document_date: \"%s\"," +
+                    " certificate_document_number: \"%s\"," +
+                    " owner_inn: \"%s\"," +
+                    " producer_inn: \"%s\"," +
+                    " production_date: \"%s\"," +
+                    " tnved_code: \"%s\"," +
+                    " uit_code: \"%s\"," +
+                    " uitu_code: \"%s\"}", certificateDocument, certificateDocumentDate.toString(), certificateDocumentNumber, ownerInn, producerInn, productionDate.toString(), tnvedCode, uitCode, uituCode);
+        }
     }
     @JsonAutoDetect
     @Getter
     @Setter
     @AllArgsConstructor
     @NoArgsConstructor
+    @EqualsAndHashCode
     static class Description {
         @JsonProperty("participantInn")
         private String participantInn;
+
+        @Override
+        public String toString() {
+            return String.format("Description {participantInn: \"%s\"}", participantInn);
+        }
     }
-    @JsonAutoDetect
-    enum DocType {
-        LP_INTRODUCE_GOODS;
+
+    static class JSONCrptApiDocConverter {
+        private static String convertDocToJSON(Document document) throws IOException {
+            StringWriter stringWriter = new StringWriter();
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.writeValue(stringWriter, document);
+            return stringWriter.toString();
+        }
     }
 }
